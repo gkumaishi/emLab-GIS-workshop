@@ -1,0 +1,276 @@
+---
+title: "Week 1"
+author: "Grace Kumaishi"
+date: "8/17/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Load packages
+library(raster)
+library(rgdal)
+library(ggplot2)
+library(dplyr) # wrangling data (add columns, filter, etc.)
+library(here)
+```
+
+### Part 1: Intro to Raster Data
+
+```{r}
+# Set your working directory to where your data lives
+setwd("~/Desktop/emLab Geospatial Workshop")
+
+GDALinfo("/Users/gracekumaishi/Desktop/emLab Geospatial Workshop/data/NEON-DS-Airborne-Remote-Sensing/HARV/DSM/HARV_dsmCrop.tif")
+
+HARV_dsmCrop_Info <- capture.output(
+  GDALinfo("/Users/gracekumaishi/Desktop/emLab Geospatial Workshop/data/NEON-DS-Airborne-Remote-Sensing/HARV/DSM/HARV_dsmCrop.tif")
+)
+
+HARV_dsmCrop_Info
+
+DSM_HARV <- raster(
+  "/Users/gracekumaishi/Desktop/emLab Geospatial Workshop/data/NEON-DS-Airborne-Remote-Sensing/HARV/DSM/HARV_dsmCrop.tif"
+)
+
+# What does this look like? 
+DSM_HARV
+  
+# What data are in the raster?
+summary(DSM_HARV)
+
+# What are the summary statistics using all of the data?
+summary(DSM_HARV, maxsamp = ncell(DSM_HARV))
+```
+
+# To plot a raster into ggplot, you need to convert the raster into a dataframe
+
+```{r}
+# Convert raster to a dataframe
+DSM_HARV_df <- as.data.frame(DSM_HARV, 
+                             xy = TRUE) # make data frame with x and y columns
+
+# What is the structure of the dataframe?
+str(DSM_HARV_df)
+
+# Let's plot our data
+ggplot() +
+  geom_raster(data = DSM_HARV_df, # specify data frame
+              aes(x = x, y = y, fill = HARV_dsmCrop)) +
+  scale_fill_viridis_c() +
+  coord_quickmap() 
+
+#raster::metadata(DSM_HARV) # empty here, but could be useful for files where metadata is included
+
+# Plot the data even more quickly
+plot(DSM_HARV)
+
+# What is the CRS of our raster?
+crs(DSM_HARV) #UTM (Universal Transverse Mercator) always has a zone; datum tells us where the 0,0, point is (WGS84), units is meters, ellipsoid (how earth's roundness is calculated) is WGS84
+
+# What's the minimum value of these data/the raster?
+minValue(DSM_HARV)
+
+# What's the maximum value?
+maxValue(DSM_HARV)
+
+# How many bands does our raster have?
+nlayers(DSM_HARV)
+
+# What is the no data value
+GDALinfo("/Users/gracekumaishi/Desktop/emLab Geospatial Workshop/data/NEON-DS-Airborne-Remote-Sensing/HARV/DSM/HARV_dsmCrop.tif")
+```
+
+# Find bad data values
+
+```{r}
+# Look at distribution of the data
+ggplot() +
+  geom_histogram(data = DSM_HARV_df,
+                 aes(HARV_dsmCrop),
+                 bins = 40)
+```
+
+# Challenge
+
+```{r}
+GDALinfo("/Users/gracekumaishi/Desktop/emLab Geospatial Workshop/data/NEON-DS-Airborne-Remote-Sensing/HARV/DSM/HARV_DSMhill.tif")
+```
+
+### Part 2: Plot Raster Data
+
+```{r}
+DSM_HARV_df <- DSM_HARV_df %>% 
+  mutate(fct_elevation = cut(HARV_dsmCrop, 
+                             breaks = 3))
+
+# Let's plot a histogram of these categories
+ggplot() +
+  geom_bar(data = DSM_HARV_df,
+          aes(fct_elevation))
+
+# look at unique levels of  categories
+unique(DSM_HARV_df$fct_elevation) # brackets are inclusive
+
+DSM_HARV_df %>% 
+  group_by(fct_elevation) %>% 
+  count()
+
+# Let's make our own custom bins
+custom_bins <- c(300, 350, 400, 450)
+
+# Add a new bin colum for our new categories
+DSM_HARV_df <- DSM_HARV_df %>%
+  mutate(fct_elevation_2 = cut(HARV_dsmCrop,
+                               breaks = custom_bins))
+
+unique(DSM_HARV_df$fct_elevation_2)
+
+ggplot() +
+  geom_bar(data = DSM_HARV_df,
+           aes(fct_elevation_2))
+
+DSM_HARV_df %>% 
+  group_by(fct_elevation_2) %>% 
+  count()
+
+ggplot() +
+  geom_raster(data = DSM_HARV_df,
+              aes(x = x, y = y, fill = fct_elevation_2)) +
+  coord_quickmap()
+
+terrain.colors(3)
+
+ggplot() +
+  geom_raster(data = DSM_HARV_df,
+              aes(x = x, y = y, fill = fct_elevation_2)) +
+  scale_fill_manual(values = terrain.colors(3)) +
+  coord_quickmap()
+
+my_col <- terrain.colors(3)
+
+ggplot() +
+  geom_raster(data = DSM_HARV_df,
+              aes(x = x, y = y, fill = fct_elevation_2)) +
+  scale_fill_manual(values = my_col,
+                    name = "Elevation (m)") +
+  coord_quickmap()
+```
+
+```{r}
+# Challenge: Plot using custom breaks
+DSM_HARV_df <- DSM_HARV_df %>% 
+  mutate(fct_elevation = cut(HARV_dsmCrop, 
+                             breaks = 6))
+
+ggplot() +
+  geom_bar(data = DSM_HARV_df,
+          aes(fct_elevation))
+
+ggplot() +
+  geom_raster(data = DSM_HARV_df,
+              aes(x = x, y = y, fill = fct_elevation)) +
+  scale_fill_manual(values = terrain.colors(6),
+                    name = "Elevation (m)") +
+  labs(title = "Harvard Forest DSM elevation (m)",
+       x = "UTM Easting Coordinate (m)",
+       y = "UTM Northing Coordinate (m)") +
+  coord_quickmap()
+```
+
+```{r}
+DSM_hill_Harv <- raster(
+  "/Users/gracekumaishi/Desktop/emLab Geospatial Workshop/data/NEON-DS-Airborne-Remote-Sensing/HARV/DSM/HARV_DSMhill.tif"
+)
+
+DSM_hill_Harv_df <- as.data.frame(DSM_hill_Harv,
+                                  xy = TRUE)
+
+ggplot() +
+  geom_raster(data = DSM_hill_Harv_df,
+              aes(x = x, y = y, alpha = HARV_DSMhill)) +
+  scale_alpha(range = c(0.15, 0.65), guide = "none") +
+  coord_quickmap()
+
+ggplot() + # start with what you want on the very bottom!!!
+  geom_raster(data = DSM_HARV_df,
+              aes(x = x, y = y, fill = HARV_dsmCrop)) +
+  geom_raster(data = DSM_hill_Harv_df,
+              aes(x = x, y = y, alpha = HARV_DSMhill)) +
+  scale_fill_viridis_c() +
+  scale_alpha(range = c(0.15, 0.65), guide = "none") +
+  ggtitle("Elevation with hillshade") +
+  coord_quickmap()
+```
+
+### Part 3: Reproject Raster Data
+
+```{r}
+DTM_HARV <- raster("/Users/gracekumaishi/Desktop/emLab Geospatial Workshop/data/NEON-DS-Airborne-Remote-Sensing/HARV/DTM/HARV_dtmCrop.tif")
+
+DTM_hill_HARV <- raster("/Users/gracekumaishi/Desktop/emLab Geospatial Workshop/data/NEON-DS-Airborne-Remote-Sensing/HARV/DTM/HARV_DTMhill_WGS84.tif")
+
+DTM_HARV_df <- as.data.frame(DTM_HARV, xy = TRUE)
+
+DTM_hill_HARV_df <- as.data.frame(DTM_hill_HARV, xy = TRUE)
+```
+
+```{r}
+ggplot() +
+  geom_raster(data = DTM_HARV_df,
+              aes(x = x, y = y, 
+                  fill = HARV_dtmCrop)) +
+  geom_raster(data = DTM_hill_HARV_df,
+              aes(x = x, y = y,
+                  alpha = HARV_DTMhill_WGS84)) +
+  scale_fill_gradientn(name = "Elevation (m)",
+                      colors = terrain.colors(10)) +
+  coord_quickmap()
+
+# CRS is different! So map won't show up
+
+crs(DTM_HARV)
+
+crs(DTM_hill_HARV)
+
+DTM_hill_UTMZ18N_HARV <- projectRaster(DTM_hill_HARV,
+                                       crs = crs(DTM_HARV))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
